@@ -1,15 +1,11 @@
 # atme_chatbot.py
 import streamlit as st
 import pandas as pd
-import requests
 import random
 import time
 from datetime import datetime
 import plotly.express as px
 import plotly.graph_objects as go
-
-# Backend API configuration
-BACKEND_URL = "http://localhost:8000"
 
 # Initialize session state
 if 'student_data' not in st.session_state:
@@ -22,6 +18,8 @@ if 'leaderboard' not in st.session_state:
     st.session_state.leaderboard = []
 if 'mood_data' not in st.session_state:
     st.session_state.mood_data = []
+if 'last_login' not in st.session_state:
+    st.session_state.last_login = None
 
 # Department options for ATME
 DEPARTMENTS = [
@@ -144,6 +142,8 @@ ATME_KNOWLEDGE = {
 • Theory Exams: May 15-30, 2025
 • Practical Exams: May 8-14, 2025
 • Project Evaluation: May 8-17, 2025
+
+**Hall Tickets:** Available 15 days before exams on portal.atme.edu.in
     """,
     
     "library information": """
@@ -550,127 +550,105 @@ ATME_KNOWLEDGE = {
 • Crisis intervention
 
 **🔒 Confidentiality:** All sessions are strictly confidential
-    """
+    """,
+    
+    # Additional questions for better coverage
+    "hello": "👋 **Hello! I'm ATME College Assistant!** 🤖\n\nI can help you with:\n• 📚 Academic information\n• 🏫 College facilities\n• 🎯 Department details\n• 🎉 Events and activities\n• 💼 Placement information\n• 🧠 Mental health support\n\nWhat would you like to know?",
+    
+    "hi": "👋 **Hi there! Welcome to ATME College!** 🎓\n\nI'm here to help you with any questions about our college. Ask me about exams, facilities, departments, or events!",
+    
+    "help": "🆘 **Here's how I can help you:**\n\n**Academic Questions:**\n• Ask about exams, schedules, fees\n• Library timings and facilities\n• Academic calendar\n\n**College Facilities:**\n• Hostel information\n• Bus services\n• Sports facilities\n• Placement cell\n\n**Departments:**\n• Department-specific information\n• Lab schedules\n• HOD contacts\n\n**Events:**\n• Upcoming college events\n• Cultural fest details\n• Technical competitions\n\nJust ask me anything! 💬"
 }
 
-# API Functions
+# OFFLINE MODE FUNCTIONS - No backend needed!
 def register_student(usn: str, name: str, department: str):
-    """Register student with backend"""
-    try:
-        response = requests.post(f"{BACKEND_URL}/students/", json={
-            "usn": usn,
-            "name": name,
-            "department": department
-        })
-        if response.status_code == 200:
-            return response.json()
-        else:
-            # Fallback to offline mode
-            return {
-                "usn": usn,
-                "name": name,
-                "department": department,
-                "points": 100,
-                "level": 1,
-                "avatar": "🎓"
-            }
-    except requests.exceptions.RequestException:
-        st.warning("⚠️ Backend not connected. Using offline mode.")
-        return {
-            "usn": usn,
-            "name": name,
-            "department": department,
-            "points": 100,
-            "level": 1,
-            "avatar": "🎓"
-        }
+    """Register student - OFFLINE MODE"""
+    student_data = {
+        "usn": usn,
+        "name": name,
+        "department": department,
+        "points": 100,
+        "level": 1,
+        "avatar": "🎓"
+    }
+    return student_data
 
 def get_student(usn: str):
-    """Get student data from backend"""
-    try:
-        response = requests.get(f"{BACKEND_URL}/students/{usn}")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-    except requests.exceptions.RequestException:
-        return None
+    """Get student data - OFFLINE MODE"""
+    return st.session_state.student_data
 
 def send_chat_message(usn: str, message: str):
-    """Send chat message to backend"""
-    try:
-        response = requests.post(f"{BACKEND_URL}/chat/", json={
-            "usn": usn,
-            "message": message
-        })
-        if response.status_code == 200:
-            return response.json()
-        else:
-            # Fallback to local knowledge base
-            response_text = ATME_KNOWLEDGE.get(message.lower(), "I'm still learning about this! Please check with college administration or visit www.atme.edu.in for official information. 📚")
-            return {"response": response_text, "points_earned": 2}
-    except requests.exceptions.RequestException:
-        # Fallback to local knowledge base
-        response_text = ATME_KNOWLEDGE.get(message.lower(), "I'm still learning about this! Please check with college administration or visit www.atme.edu.in for official information. 📚")
-        return {"response": response_text, "points_earned": 2}
+    """Send chat message - OFFLINE MODE"""
+    # Find the best matching response
+    user_message_lower = message.lower()
+    response = ATME_KNOWLEDGE.get(user_message_lower, 
+        "I'm still learning about this! Please check with college administration or visit www.atme.edu.in for official information. 📚")
+    
+    # Update points in session state
+    if st.session_state.student_data:
+        st.session_state.student_data["points"] += 2
+        st.session_state.student_data["level"] = st.session_state.student_data["points"] // 100 + 1
+        
+        # Check for first chat achievement
+        if len(st.session_state.chat_history) == 0 and "first_chat" not in st.session_state.achievements:
+            st.session_state.achievements.append({"achievement_key": "first_chat", "achievement_name": "First Conversation"})
+            st.session_state.student_data["points"] += 20
+    
+    return {"response": response, "points_earned": 2}
 
 def update_mood(usn: str, mood: str):
-    """Update student mood"""
-    try:
-        response = requests.post(f"{BACKEND_URL}/mood/", json={
-            "usn": usn,
-            "mood": mood
-        })
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return {"message": "Mood updated successfully! 🌈", "points_earned": 8}
-    except requests.exceptions.RequestException:
-        return {"message": "Mood updated successfully! 🌈", "points_earned": 8}
+    """Update student mood - OFFLINE MODE"""
+    if st.session_state.student_data:
+        st.session_state.student_data["points"] += 8
+        st.session_state.student_data["level"] = st.session_state.student_data["points"] // 100 + 1
+        
+        # Check for wellness achievement
+        if "wellness_warrior" not in st.session_state.achievements:
+            st.session_state.achievements.append({"achievement_key": "wellness_warrior", "achievement_name": "Wellness Warrior"})
+            st.session_state.student_data["points"] += 30
+    
+    return {"message": "Mood updated successfully! 🌈", "points_earned": 8}
 
 def get_chat_history(usn: str):
-    """Get chat history from backend"""
-    try:
-        response = requests.get(f"{BACKEND_URL}/chat-history/{usn}")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return st.session_state.chat_history
-    except requests.exceptions.RequestException:
-        return st.session_state.chat_history
+    """Get chat history - OFFLINE MODE"""
+    return st.session_state.chat_history
 
 def get_achievements(usn: str):
-    """Get student achievements"""
-    try:
-        response = requests.get(f"{BACKEND_URL}/achievements/{usn}")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return st.session_state.achievements
-    except requests.exceptions.RequestException:
-        return st.session_state.achievements
+    """Get student achievements - OFFLINE MODE"""
+    return st.session_state.achievements
 
 def get_leaderboard():
-    """Get leaderboard from backend"""
-    try:
-        response = requests.get(f"{BACKEND_URL}/leaderboard/")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return []
-    except requests.exceptions.RequestException:
-        return []
+    """Get leaderboard - OFFLINE MODE"""
+    # Create sample leaderboard with current student
+    if st.session_state.student_data:
+        return [
+            {"name": "Riya Vijay", "usn": "4AT23EC001", "department": "ECE", "points": 185, "level": 2},
+            {"name": "Yeshaswini Madhumita", "usn": "4AT23CS001", "department": "CSE", "points": 167, "level": 2},
+            {"name": st.session_state.student_data["name"], "usn": st.session_state.student_data["usn"], 
+             "department": st.session_state.student_data["department"], "points": st.session_state.student_data["points"], "level": st.session_state.student_data["level"]},
+            {"name": "Sandesh Mrashi", "usn": "4AT23EC002", "department": "ECE", "points": 142, "level": 2},
+            {"name": "Aryan Sharma", "usn": "4AT23ME001", "department": "Mechanical", "points": 128, "level": 2}
+        ]
+    return []
 
 def claim_daily_bonus(usn: str):
-    """Claim daily bonus"""
-    try:
-        response = requests.post(f"{BACKEND_URL}/daily-bonus/{usn}")
-        if response.status_code == 200:
-            return response.json()
-        else:
+    """Claim daily bonus - OFFLINE MODE"""
+    today = datetime.now().date()
+    
+    if st.session_state.last_login != today:
+        st.session_state.last_login = today
+        if st.session_state.student_data:
+            st.session_state.student_data["points"] += 10
+            st.session_state.student_data["level"] = st.session_state.student_data["points"] // 100 + 1
+            
+            # Check for daily user achievement
+            if "daily_user" not in st.session_state.achievements:
+                st.session_state.achievements.append({"achievement_key": "daily_user", "achievement_name": "Daily User"})
+                st.session_state.student_data["points"] += 15
+            
             return {"message": "Daily bonus claimed! 🎁", "points_earned": 10}
-    except requests.exceptions.RequestException:
-        return {"message": "Daily bonus claimed! 🎁", "points_earned": 10}
+    
+    return {"message": "Daily bonus already claimed today", "points_earned": 0}
 
 def get_department_theme(department):
     """Get department theme based on selection"""
@@ -686,8 +664,7 @@ def get_department_theme(department):
 
 def create_progress_chart(points, level):
     """Create a progress chart for points"""
-    next_level_points = level * 100
-    progress = (points % 100) / 100 * 100
+    progress = (points % 100)
     
     fig = go.Figure(go.Indicator(
         mode = "gauge+number+delta",
@@ -706,7 +683,7 @@ def create_progress_chart(points, level):
                 'thickness': 0.75,
                 'value': 90}}))
     
-    fig.update_layout(height=250)
+    fig.update_layout(height=250, margin=dict(t=50, b=10, l=10, r=10))
     return fig
 
 def main():
@@ -822,48 +799,50 @@ def main():
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
-        padding: 15px;
-        border-radius: 15px;
-        margin: 8px 0;
+        padding: 12px;
+        border-radius: 12px;
+        margin: 6px 0;
         width: 100%;
         cursor: pointer;
         transition: all 0.3s ease;
         font-weight: 600;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        font-size: 0.9em;
     }
     
     .question-button:hover {
         background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
     }
     
     .action-button {
         background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
         color: white;
         border: none;
-        padding: 12px;
-        border-radius: 12px;
-        margin: 5px;
+        padding: 10px;
+        border-radius: 10px;
+        margin: 4px;
         cursor: pointer;
         transition: all 0.3s ease;
         font-weight: 600;
+        font-size: 0.85em;
     }
     
     .action-button:hover {
         transform: scale(1.05);
-        box-shadow: 0 6px 20px rgba(72, 187, 120, 0.4);
+        box-shadow: 0 4px 15px rgba(72, 187, 120, 0.3);
     }
     
     .achievement-badge {
         background: linear-gradient(135deg, #f6e05e 0%, #ecc94b 100%);
         color: #744210;
-        padding: 10px 15px;
-        border-radius: 20px;
-        margin: 5px;
-        font-size: 0.9em;
+        padding: 8px 12px;
+        border-radius: 15px;
+        margin: 4px;
+        font-size: 0.8em;
         font-weight: 600;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
     .pulse {
@@ -882,23 +861,27 @@ def main():
     
     @keyframes float {
         0% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
+        50% { transform: translateY(-8px); }
         100% { transform: translateY(0px); }
     }
     
     .feature-card {
         background: white;
-        padding: 20px;
-        border-radius: 15px;
-        margin: 10px 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        padding: 15px;
+        border-radius: 12px;
+        margin: 8px 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
-        border-left: 5px solid #667eea;
+        border-left: 4px solid #667eea;
     }
     
     .feature-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    }
+    
+    .stButton button {
+        width: 100%;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -925,16 +908,11 @@ def main():
                 student_data = register_student(student_usn, student_name, selected_department)
                 if student_data:
                     st.session_state.student_data = student_data
-                    st.session_state.chat_history = get_chat_history(student_usn)
-                    st.session_state.achievements = get_achievements(student_usn)
-                    st.session_state.leaderboard = get_leaderboard()
                     
                     # Claim daily bonus on login
                     bonus_result = claim_daily_bonus(student_usn)
                     if bonus_result["points_earned"] > 0:
                         st.success(f"🎁 {bonus_result['message']} +{bonus_result['points_earned']} points!")
-                        # Refresh student data
-                        st.session_state.student_data = get_student(student_usn) or student_data
                     
                     st.rerun()
         else:
@@ -950,13 +928,13 @@ def main():
         <div class="atme-card" style="background: {dept_theme['bg_gradient']};">
             <div style="display: flex; align-items: center; justify-content: space-between;">
                 <div>
-                    <h2 style="margin: 0; font-size: 2.5rem;">{dept_theme["emoji"]} Welcome, {student_data["name"]}!</h2>
-                    <p style="margin: 10px 0; font-size: 1.2rem;">🎯 {student_data["department"]} | 🆔 {student_data["usn"]}</p>
-                    <p style="margin: 0; font-size: 0.9rem; opacity: 0.9;">📍 Adichunchanagiri Road, Mysuru - 570028</p>
+                    <h2 style="margin: 0; font-size: 2rem;">{dept_theme["emoji"]} Welcome, {student_data["name"]}!</h2>
+                    <p style="margin: 8px 0; font-size: 1.1rem;">🎯 {student_data["department"]} | 🆔 {student_data["usn"]}</p>
+                    <p style="margin: 0; font-size: 0.85rem; opacity: 0.9;">📍 Adichunchanagiri Road, Mysuru - 570028</p>
                 </div>
                 <div style="text-align: center;">
-                    <h3 style="margin: 0; font-size: 3rem;" class="pulse">🏆 {student_data["points"]}</h3>
-                    <p style="margin: 0; font-size: 1.1rem;">Level {student_data["level"]} 🚀</p>
+                    <h3 style="margin: 0; font-size: 2.5rem;" class="pulse">🏆 {student_data["points"]}</h3>
+                    <p style="margin: 0; font-size: 1rem;">Level {student_data["level"]} 🚀</p>
                 </div>
             </div>
         </div>
@@ -976,7 +954,7 @@ def main():
             
             with tab1:
                 cols = st.columns(2)
-                general_questions = ["college address", "contact information", "upcoming events", "college clubs"]
+                general_questions = ["college address", "contact information", "upcoming events", "college clubs", "hello", "help"]
                 for i, question in enumerate(general_questions):
                     with cols[i % 2]:
                         if st.button(f"❓ {question.title()}", key=f"gen_{i}", use_container_width=True):
@@ -986,8 +964,6 @@ def main():
                                 "bot_response": response_data["response"],
                                 "timestamp": datetime.now().isoformat()
                             })
-                            st.session_state.student_data = get_student(student_data["usn"]) or student_data
-                            st.session_state.achievements = get_achievements(student_data["usn"])
                             st.rerun()
             
             with tab2:
@@ -1002,7 +978,6 @@ def main():
                                 "bot_response": response_data["response"],
                                 "timestamp": datetime.now().isoformat()
                             })
-                            st.session_state.student_data = get_student(student_data["usn"]) or student_data
                             st.rerun()
             
             with tab3:
@@ -1017,13 +992,27 @@ def main():
                                 "bot_response": response_data["response"],
                                 "timestamp": datetime.now().isoformat()
                             })
-                            st.session_state.student_data = get_student(student_data["usn"]) or student_data
                             st.rerun()
             
             with tab4:
                 cols = st.columns(2)
-                dept_key = student_data["department"].split()[0].lower()
-                dept_questions = [f"{dept_key} department", f"{dept_key} labs", "ieee events", "technical fest"]
+                # Get department-specific questions
+                dept_map = {
+                    "CSE": ["cse department", "cse labs"],
+                    "ECE": ["ece department", "ece labs"], 
+                    "Data Science": ["data science department"],
+                    "AIML": ["aiml department"],
+                    "Cyber Security": ["cyber security department"],
+                    "Mechanical": ["mechanical department"],
+                    "Civil": ["civil department"],
+                    "EEE": ["eee department"],
+                    "CSD": ["college clubs"]
+                }
+                
+                dept_key = student_data["department"].split()[0]
+                dept_questions = dept_map.get(dept_key, ["cse department", "cse labs"])
+                dept_questions.extend(["ieee events", "technical fest"])
+                
                 for i, question in enumerate(dept_questions):
                     with cols[i % 2]:
                         if st.button(f"❓ {question.title()}", key=f"dept_{i}", use_container_width=True):
@@ -1033,7 +1022,6 @@ def main():
                                 "bot_response": response_data["response"],
                                 "timestamp": datetime.now().isoformat()
                             })
-                            st.session_state.student_data = get_student(student_data["usn"]) or student_data
                             st.rerun()
             
             # Manual question input
@@ -1045,7 +1033,7 @@ def main():
             
             if user_question:
                 with st.spinner("🤔 Thinking..."):
-                    time.sleep(1.5)
+                    time.sleep(1)
                     response_data = send_chat_message(student_data["usn"], user_question)
                     
                     st.session_state.chat_history.append({
@@ -1053,10 +1041,6 @@ def main():
                         "bot_response": response_data["response"],
                         "timestamp": datetime.now().isoformat()
                     })
-                    
-                    # Refresh all data
-                    st.session_state.student_data = get_student(student_data["usn"]) or student_data
-                    st.session_state.achievements = get_achievements(student_data["usn"])
                     st.rerun()
             
             # Display chat history
@@ -1064,10 +1048,10 @@ def main():
             chat_history = get_chat_history(student_data["usn"])
             
             if chat_history:
-                for chat in reversed(chat_history[-8:]):
+                for chat in reversed(chat_history[-6:]):
                     st.markdown(f'<div class="chat-bubble-user">👤 {chat["user_message"]}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="chat-bubble-bot">🤖 {chat["bot_response"]}</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div style="text-align: center; color: #718096; font-size: 0.8em; margin: 10px 0;">⏰ {datetime.fromisoformat(chat["timestamp"]).strftime("%H:%M")}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="text-align: center; color: #718096; font-size: 0.75em; margin: 8px 0;">⏰ {datetime.fromisoformat(chat["timestamp"]).strftime("%H:%M")}</div>', unsafe_allow_html=True)
                     st.markdown("---")
             else:
                 st.info("""
@@ -1139,10 +1123,6 @@ def main():
                 result = update_mood(student_data["usn"], mood)
                 st.success(f"✅ {result['message']} +{result['points_earned']} points!")
                 
-                # Refresh data
-                st.session_state.student_data = get_student(student_data["usn"]) or student_data
-                st.session_state.achievements = get_achievements(student_data["usn"])
-                
                 # Show random wellness tip
                 wellness_tips = [
                     "Remember to take breaks and breathe deeply! 🧘‍♀️",
@@ -1160,10 +1140,8 @@ def main():
             st.subheader("🏆 Your Achievements")
             achievements = get_achievements(student_data["usn"])
             if achievements:
-                for achievement in achievements[:4]:  # Show first 4 achievements
+                for achievement in achievements:
                     st.markdown(f'<div class="achievement-badge">⭐ {achievement["achievement_name"]}</div>', unsafe_allow_html=True)
-                if len(achievements) > 4:
-                    st.caption(f"+ {len(achievements) - 4} more achievements...")
             else:
                 st.info("No achievements yet. Keep chatting to earn them! 🎯")
             
@@ -1179,8 +1157,9 @@ def main():
                     else:
                         return [''] * len(row)
                 
+                styled_df = leaderboard_df[["name", "department", "points"]].head(6).style.apply(highlight_user, axis=1)
                 st.dataframe(
-                    leaderboard_df[["name", "department", "points"]].head(8),
+                    styled_df,
                     use_container_width=True,
                     hide_index=True
                 )
@@ -1205,8 +1184,8 @@ def main():
                 if dept in student_data["department"]:
                     st.markdown(f'''
                     <div class="feature-card">
-                        <h4 style="margin: 0 0 10px 0; color: {dept_theme['color']};">{dept_theme["emoji"]} {dept}</h4>
-                        <p style="margin: 0; color: #4A5568;">{info}</p>
+                        <h4 style="margin: 0 0 8px 0; color: {dept_theme['color']};">{dept_theme["emoji"]} {dept}</h4>
+                        <p style="margin: 0; color: #4A5568; font-size: 0.9em;">{info}</p>
                     </div>
                     ''', unsafe_allow_html=True)
                     break
@@ -1214,11 +1193,11 @@ def main():
     else:
         # Enhanced landing page
         st.markdown("""
-        <div style="text-align: center; padding: 40px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; color: white; margin: 20px 0;">
-            <h1 style="font-size: 3rem; margin: 0;">🎓 ATME College of Engineering</h1>
-            <p style="font-size: 1.5rem; margin: 10px 0;">Where Innovation Meets Excellence ✨</p>
-            <p style="margin: 5px 0;">📍 Adichunchanagiri Road, Mysuru - 570028</p>
-            <p style="margin: 5px 0;">📞 0821-1234567 | 🌐 www.atme.edu.in</p>
+        <div style="text-align: center; padding: 30px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; color: white; margin: 20px 0;">
+            <h1 style="font-size: 2.5rem; margin: 0;">🎓 ATME College of Engineering</h1>
+            <p style="font-size: 1.3rem; margin: 10px 0;">Where Innovation Meets Excellence ✨</p>
+            <p style="margin: 5px 0; font-size: 0.9rem;">📍 Adichunchanagiri Road, Mysuru - 570028</p>
+            <p style="margin: 5px 0; font-size: 0.9rem;">📞 0821-1234567 | 🌐 www.atme.edu.in</p>
         </div>
         """, unsafe_allow_html=True)
         
@@ -1227,21 +1206,21 @@ def main():
         
         feature_cols = st.columns(3)
         features = [
-            {"emoji": "💬", "title": "AI-Powered Chat", "desc": "Smart responses with natural language processing"},
+            {"emoji": "💬", "title": "AI-Powered Chat", "desc": "Smart responses with instant answers"},
             {"emoji": "🎯", "title": "Department Specific", "desc": "Tailored information for your branch"},
             {"emoji": "🏆", "title": "Gamification", "desc": "Earn points, levels & achievements"},
             {"emoji": "🧠", "title": "Wellness Support", "desc": "Mental health tracking & tips"},
             {"emoji": "📊", "title": "Live Analytics", "desc": "Track progress with beautiful charts"},
-            {"emoji": "💾", "title": "Data Persistence", "desc": "Your data saved securely"}
+            {"emoji": "⚡", "title": "Instant Response", "desc": "No delays, works offline"}
         ]
         
         for i, feature in enumerate(features):
             with feature_cols[i % 3]:
                 st.markdown(f"""
                 <div class="feature-card">
-                    <h3 style="margin: 0; font-size: 2.5rem; text-align: center;">{feature['emoji']}</h3>
-                    <h4 style="margin: 15px 0 10px 0; color: #2D3748; text-align: center;">{feature['title']}</h4>
-                    <p style="margin: 0; color: #718096; text-align: center; font-size: 0.9em;">{feature['desc']}</p>
+                    <h3 style="margin: 0; font-size: 2rem; text-align: center;">{feature['emoji']}</h3>
+                    <h4 style="margin: 10px 0 8px 0; color: #2D3748; text-align: center; font-size: 1rem;">{feature['title']}</h4>
+                    <p style="margin: 0; color: #718096; text-align: center; font-size: 0.8em;">{feature['desc']}</p>
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -1251,28 +1230,28 @@ def main():
         guide_cols = st.columns(3)
         with guide_cols[0]:
             st.markdown("""
-            <div style="text-align: center; padding: 20px;">
-                <h3>1️⃣</h3>
-                <h4>Enter Details</h4>
-                <p>Fill your name, USN and select department</p>
+            <div style="text-align: center; padding: 15px;">
+                <h3 style="font-size: 1.5rem;">1️⃣</h3>
+                <h4 style="margin: 8px 0;">Enter Details</h4>
+                <p style="margin: 0; font-size: 0.8em;">Fill your name, USN and select department</p>
             </div>
             """, unsafe_allow_html=True)
         
         with guide_cols[1]:
             st.markdown("""
-            <div style="text-align: center; padding: 20px;">
-                <h3>2️⃣</h3>
-                <h4>Login</h4>
-                <p>Click the login button to get started</p>
+            <div style="text-align: center; padding: 15px;">
+                <h3 style="font-size: 1.5rem;">2️⃣</h3>
+                <h4 style="margin: 8px 0;">Login</h4>
+                <p style="margin: 0; font-size: 0.8em;">Click the login button to get started</p>
             </div>
             """, unsafe_allow_html=True)
         
         with guide_cols[2]:
             st.markdown("""
-            <div style="text-align: center; padding: 20px;">
-                <h3>3️⃣</h3>
-                <h4>Start Chatting</h4>
-                <p>Ask questions and explore features</p>
+            <div style="text-align: center; padding: 15px;">
+                <h3 style="font-size: 1.5rem;">3️⃣</h3>
+                <h4 style="margin: 8px 0;">Start Chatting</h4>
+                <p style="margin: 0; font-size: 0.8em;">Ask questions and explore features</p>
             </div>
             """, unsafe_allow_html=True)
 
